@@ -14,7 +14,7 @@ import matplotlib.animation as animation
 
 
 # Parameters
-GRID_SIZE = (200, 200)
+GRID_SIZE = (100, 100)
 POP_SIZE = 400
 NUM_GENERATIONS = 3000
 NUM_STEPS = 100
@@ -26,6 +26,11 @@ NUM_GENERATIONS_BREAKING = 75
 MUTATION_INCREASE = 0.00025 # 0.0025
 MAX_MUTATION_RATE = 0.010 # 0.075
 CROSSOVER_PROB = 0.85
+
+w_TP = 8   # encourage restoring signal 4
+w_TN = 1   # encourage background preservation 1
+w_FN = 6   # penalize missing pixels 2
+w_FP = 3   # penalize hallucinated pixels 1
 
 INITIAL_GRID = np.random.randint(0, 2, size=GRID_SIZE, dtype=int)
 
@@ -138,10 +143,6 @@ def fitness(rule, n_last=10):
     target_zeros = np.sum(target_pattern == 0)
     total_cells = target_ones + target_zeros
     
-    w_TP = 8   # encourage restoring signal 4
-    w_TN = 1   # encourage background preservation 1
-    w_FN = 6   # penalize missing pixels 2
-    w_FP = 3   # penalize hallucinated pixels 1
 
     mininum_fitness = - (target_zeros * w_FP + target_ones * w_FN)
     maximum_fitness = (target_zeros * w_TN + target_ones * w_TP)
@@ -447,7 +448,41 @@ def run_ga(target_pattern, noise_levels, base_folder):
         print(f"Final fitness: {final_fitness:.2f}")
 
 
+def baseline_fitness(target):
+    # Load the target pattern
+    target_pattern = png_to_grid(target)  # Or use your own drawn pattern
+    all_white_grid = np.ones(GRID_SIZE, dtype=int)
+    fitness_score_norm = 0
+    target_ones = np.sum(target_pattern == 1)
+    target_zeros = np.sum(target_pattern == 0)
+    
+    mininum_fitness = - (target_zeros * w_FP + target_ones * w_FN)
+    maximum_fitness = (target_zeros * w_TN + target_ones * w_TP)
+
+
+    matches_1 = (target_pattern == 1) & (all_white_grid == 1)
+    matches_0 = (target_pattern == 0) & (all_white_grid == 0)
+    false_negatives = (target_pattern == 1) & (all_white_grid == 0)
+    false_positives = (target_pattern == 0) & (all_white_grid == 1)
+
+    fitness_score = 0
+
+    fitness_score += w_TP * np.sum(matches_1)
+    fitness_score += w_TN * np.sum(matches_0)
+    fitness_score -= w_FN * np.sum(false_negatives)
+    fitness_score -= w_FP * np.sum(false_positives)
+
+    fitness_score_norm += abs(fitness_score - mininum_fitness) / abs(maximum_fitness - mininum_fitness) 
+
+    print (f"Fitness score: {fitness_score_norm}")
+
+
+
 if __name__ == "__main__":
+
+    baseline_fitness('circle_full_100.png')
+
+    exit()
 
     # noise_levels = [0.025, 0.05, 0.10, 0.20]
     noise_levels = [0.025, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50]
@@ -473,102 +508,31 @@ if __name__ == "__main__":
     # plt.show()
 
     exit ()
-
-
-    noise_levels = [0.05, 0.10, 0.20, 0.30]
-
-    base_save_path = "denoising_results"
-    target_pattern = png_to_grid("stay4_initial.png")
+    target = 'smiley_100.png'
+    # Load the target pattern
+    target_pattern = png_to_grid(target)  # Or use your own drawn pattern
+    all_white_grid = np.zeros(GRID_SIZE, dtype=int)
+    fitness_score_norm = 0
+    target_ones = np.sum(target_pattern == 1)
+    target_zeros = np.sum(target_pattern == 0)
     
-
-    INITIAL_GRID = add_noise_to_grid(target_pattern, noise_level=0.1)
-
-
-    initial_grid_save_path = f"{base_save_path}_initial.png"
-    plt.imsave(initial_grid_save_path, INITIAL_GRID, cmap='binary')
-
-    print("Target:\n", target_pattern.astype(int))
-    print("Initial grid:\n", INITIAL_GRID.astype(int))
-    print("Evolving...")
-    best_rule, fitness_log = evolve()
-    result = apply_rule(INITIAL_GRID, best_rule)
-
-    visualize_evolution(result, seconds=2, save_path=f"{base_save_path}.gif")
-
-    # Save the best rule
-    np.save(f"{base_save_path}_best_rule.npy", best_rule)
-    # Save the fitness log
-    np.save(f"{base_save_path}_fitness_log.npy", fitness_log)
-    # Save the final grid
-    plt.imsave(f"{base_save_path}_final.png", result[-1], cmap='binary')
-
-    print("Target pattern vs. Evolved result:")
-    print("Target:\n", target_pattern.astype(int))
-    print("Result:\n", result[-1].astype(int))
-
-    # Show animation   of best rule
-
-    exit()
-
-    grid_of_1s = np.ones(GRID_SIZE, dtype=int)
-    grid_of_0s = np.zeros(GRID_SIZE, dtype=int)
-
-    test_grids = [target_pattern, grid_of_1s, grid_of_0s]
-    target_ones = np.sum(target_pattern == 1)
-    target_zeros = np.sum(target_pattern == 0)
-
-    # Avoid division by zero
-    reward_1 = 4000 / target_ones if target_ones > 0 else 0
-    reward_0 = 4000 / target_zeros if target_zeros > 0 else 0
-
-    for grid in test_grids:
-        fitness_score = 0
-        matches_1 = (target_pattern == 1) & (grid == 1)
-        matches_0 = (target_pattern == 0) & (grid == 0)
-        false_negatives = (target_pattern == 1) & (grid == 0)
-        false_positives = (target_pattern == 0) & (grid == 1)
+    mininum_fitness = - (target_zeros * w_FP + target_ones * w_FN)
+    maximum_fitness = (target_zeros * w_TN + target_ones * w_TP)
 
 
-        fitness_score += reward_1 * np.sum(matches_1)
-        fitness_score += reward_0 * np.sum(matches_0)
-        fitness_score -= (reward_1 / 1) * np.sum(false_negatives)
-        fitness_score -= (reward_1 / 1) * np.sum(false_positives)
+    matches_1 = (target_pattern == 1) & (all_white_grid == 1)
+    matches_0 = (target_pattern == 0) & (all_white_grid == 0)
+    false_negatives = (target_pattern == 1) & (all_white_grid == 0)
+    false_positives = (target_pattern == 0) & (all_white_grid == 1)
 
-        print(f"Fitness score for grid:\n{grid.astype(int)}\nScore: {fitness_score}")
+    fitness_score = 0
 
-    exit()
+    fitness_score += w_TP * np.sum(matches_1)
+    fitness_score += w_TN * np.sum(matches_0)
+    fitness_score -= w_FN * np.sum(false_negatives)
+    fitness_score -= w_FP * np.sum(false_positives)
 
-    grid_of_1s = np.ones(GRID_SIZE, dtype=int)
-    grid_of_0s = np.zeros(GRID_SIZE, dtype=int)
-    grid_with_1_1s = np.zeros(GRID_SIZE, dtype=int)
-    grid_with_1_1s[6, 6] = 1  # simple square for testing
-    grid_with_1_0s = np.ones(GRID_SIZE, dtype=int)
-    grid_with_1_0s[5, 5] = 0  # simple square for testing
+    fitness_score_norm += abs(fitness_score - mininum_fitness) / abs(maximum_fitness - mininum_fitness) 
 
-    target_pattern = grid_with_1_1s
-
-    test_grids = [target_pattern, grid_of_1s, grid_of_0s]
-    target_ones = np.sum(target_pattern == 1)
-    target_zeros = np.sum(target_pattern == 0)
-
-    # Avoid division by zero
-    reward_1 = 4000 / target_ones if target_ones > 0 else 0
-    reward_0 = 4000 / target_zeros if target_zeros > 0 else 0
-
-    for grid in test_grids:
-        fitness_score = 0
-        matches_1 = (target_pattern == 1) & (grid == 1)
-        matches_0 = (target_pattern == 0) & (grid == 0)
-        false_negatives = (target_pattern == 1) & (grid == 0)
-        false_positives = (target_pattern == 0) & (grid == 1)
-
-
-        fitness_score += reward_1 * np.sum(matches_1)
-        fitness_score += reward_0 * np.sum(matches_0)
-        fitness_score -= (reward_1 / 1) * np.sum(false_negatives)
-        fitness_score -= (reward_0 / 1) * np.sum(false_positives)
-
-        print(f"Fitness score for grid:\n{grid.astype(int)}\nScore: {fitness_score}")
-
-    exit()
+    print (f"Fitness score: {fitness_score_norm}")
 

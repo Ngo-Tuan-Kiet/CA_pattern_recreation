@@ -1,5 +1,0 @@
-- the one that goes up -> maby include lambdas parameter to fitness or increase n_last to get more interesinng and dynamic results
-- use fitness function that looks at smiley pattern globally and not neccesarrily in the same place like CNNs
-- average fintesee massively drops off, when supposed point of convergence is reached -> probybly because of too high mutationrate change, when no improvement is detected
-- fitness: no camparison between differnt targets possible
-- baseline:all white
